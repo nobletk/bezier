@@ -17,14 +17,21 @@ An interactive, real-time 3D and 2D modeling tool built with C++, OpenGL, and GL
   * [3D Mode Specific](#3d-mode-specific)
 * [Architecture Overview](#-architecture-overview)
 
+---
 
 ## Demos
 
 ### 2D Surface
 
+https://github.com/user-attachments/assets/ca49cf70-d982-451e-8058-a6011e9646dc
+
 ### 3D 4x4 Mesh
 
+https://github.com/user-attachments/assets/a22ac81d-dbc5-4648-8ccf-161cef20d0a1
+
 ### 3D Utah Teapot
+
+https://github.com/user-attachments/assets/5ac5e907-1750-45b9-b8e5-716d0dda0b12
 
 ## Features
 
