@@ -1,11 +1,12 @@
 #ifndef BEZIERMATH_H
 #define BEZIERMATH_H
 
-#include "Point.h"
 #include <vector>
 
+#include "Point.h"
+
 // Linear Interpolation
-inline float lerp(float a, float b, float t) { return a + (b - a) * t; }
+inline float customLerp(float a, float b, float t) { return a + (b - a) * t; }
 
 // Iterative function to evalutate a Bezier curve using De Casteljau's
 // Algorithm.
@@ -18,9 +19,9 @@ inline Point evaluateDeCasteljau(std::vector<Point> pts, float t) {
 
   for (int k = 1; k < n; k++) {
     for (int i = 0; i < n - k; i++) {
-      float newX = lerp(pts[i].getX(), pts[i + 1].getX(), t);
-      float newY = lerp(pts[i].getY(), pts[i + 1].getY(), t);
-      float newZ = lerp(pts[i].getZ(), pts[i + 1].getZ(), t);
+      float newX = customLerp(pts[i].getX(), pts[i + 1].getX(), t);
+      float newY = customLerp(pts[i].getY(), pts[i + 1].getY(), t);
+      float newZ = customLerp(pts[i].getZ(), pts[i + 1].getZ(), t);
 
       pts[i].setX(newX);
       pts[i].setY(newY);
