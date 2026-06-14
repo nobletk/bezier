@@ -94,3 +94,12 @@ Right-click anywhere on the screen to access the **Contextual Menu** (Options ch
 * `Utils.h`: Helper math for Ray-picking, vector projection, and coordinate mapping.
 * `Point.h`: Data structure representing a 3D coordinate with color and size properties.
 * `TeapotData.h` & `RocketData.h`: Stored arrays of vertices and indices for complex 3D patch models.
+
+---
+
+## Fuente reutilizada/adaptada
+* **Repositorio:** https://github.com/nobletk/bezier
+* **Autor:** nobletk
+* **Tecnología:** C++ con OpenGL/GLUT
+* **Parte reutilizada/adaptada:** Manejo de eventos del mouse, selección/interacción de puntos de control, conversión de coordenadas y movimiento de puntos mediante callbacks de GLUT.
+* **Adaptación realizada:** La lógica se modificó para trabajar como edición de vértices 2D en el plano, con activación/desactivación mediante tecla V.

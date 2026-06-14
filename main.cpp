@@ -12,6 +12,25 @@
 #include <vector>
 
 // Globals
+// ============================================================================
+// LOGICA DE EDICION DE VERTICES 2D EN EL PLANO
+// Adaptado de: https://github.com/nobletk/bezier (Autor: nobletk)
+// Tecnologia: C++ con OpenGL/GLUT
+// Adaptacion: Se modifico la logica de interaccion y callbacks de seleccion y
+// movimiento de puntos de control de Bezier para trabajar como edicion de
+// vertices 2D libres en el plano, controlados por activacion/desactivacion (tecla V).
+// ============================================================================
+struct Vertex2D {
+  float x;
+  float y;
+  Vertex2D(float x_ = 0.0f, float y_ = 0.0f) : x(x_), y(y_) {}
+};
+
+bool vertexEditEnabled = false;
+std::vector<Vertex2D> vertices;
+int selectedVertexIndex = -1;
+const float selectionRadius = 15.0f;
+
 enum AppMode { MODE_CURVE_2D, MODE_SURFACE_3D };
 
 enum InteractionState {
@@ -64,6 +83,115 @@ GLdouble model_view[16];
 GLdouble projection[16];
 GLint viewport[4];
 
+// ============================================================================
+// FUNCIONES DE CONTROL Y DIBUJO DE VERTICES (MODULO REUTILIZABLE)
+// ============================================================================
+void toggleVertexEditMode() {
+  vertexEditEnabled = !vertexEditEnabled;
+  if (vertexEditEnabled) {
+    std::cout << "Modo edicion de vertices: ACTIVADO" << std::endl;
+  } else {
+    std::cout << "Modo edicion de vertices: DESACTIVADO" << std::endl;
+    selectedVertexIndex = -1;
+  }
+  glutPostRedisplay();
+}
+
+void insertVertex(float x, float y) {
+  vertices.push_back(Vertex2D(x, y));
+  std::cout << "Vertice insertado en: (" << x << ", " << y << ")" << std::endl;
+}
+
+int findNearestVertex(float x, float y) {
+  float minDistanceSq = selectionRadius * selectionRadius;
+  int nearestIndex = -1;
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    float distSq = pow(vertices[i].x - x, 2) + pow(vertices[i].y - y, 2);
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq;
+      nearestIndex = i;
+    }
+  }
+  return nearestIndex;
+}
+
+void startMoveVertex(int index) {
+  if (index >= 0 && index < (int)vertices.size()) {
+    selectedVertexIndex = index;
+    std::cout << "Vertice seleccionado para mover: indice " << index << std::endl;
+  }
+}
+
+void moveSelectedVertex(float x, float y) {
+  if (selectedVertexIndex >= 0 && selectedVertexIndex < (int)vertices.size()) {
+    vertices[selectedVertexIndex].x = std::max(0.0f, std::min(x, LOGICAL_WIDTH));
+    vertices[selectedVertexIndex].y = std::max(0.0f, std::min(y, LOGICAL_HEIGHT));
+  }
+}
+
+void stopMoveVertex() {
+  if (selectedVertexIndex != -1) {
+    std::cout << "Vertice soltado en nueva posicion." << std::endl;
+    selectedVertexIndex = -1;
+  }
+}
+
+void drawVertices() {
+  if (vertices.empty()) {
+    return;
+  }
+
+  // 1. Dibujar la curva de Bezier generada por los vertices usando el algoritmo de De Casteljau
+  if (vertices.size() > 1) {
+    std::vector<Point> controlPts;
+    for (const auto &v : vertices) {
+      controlPts.push_back(Point(v.x, v.y, 0.0f));
+    }
+
+    glColor3f(0.85f, 0.15f, 0.15f); // Rojo elegante para la curva de Bezier generada
+    glLineWidth(3.0f);
+    glBegin(GL_LINE_STRIP);
+    int resolution = 100;
+    for (int i = 0; i <= resolution; ++i) {
+      float t = (float)i / (float)resolution;
+      Point p = evaluateDeCasteljau(controlPts, t);
+      glVertex3f(p.getX(), p.getY(), 0.0f);
+    }
+    glEnd();
+
+    // 2. Dibujar el polígono de control (líneas que conectan los vértices)
+    glColor3f(0.3f, 0.7f, 0.9f); // Azul cielo vibrante
+    glLineWidth(1.0f);
+    glBegin(GL_LINE_STRIP);
+    for (const auto &v : vertices) {
+      glVertex3f(v.x, v.y, 0.0f);
+    }
+    glEnd();
+    glLineWidth(1.0f); // Resetear grosor
+  }
+
+  // 3. Dibujar los vertices individuales como puntos circulares
+  for (size_t i = 0; i < vertices.size(); ++i) {
+    float currentSize = 6.0f; // Tamaño normal
+    
+    // Si esta seleccionado, lo dibujamos mas grande y en color rojo
+    if ((int)i == selectedVertexIndex) {
+      glColor3f(1.0f, 0.3f, 0.3f); // Rojo brillante
+      currentSize = 10.0f;
+    } else {
+      glColor3f(0.2f, 0.8f, 0.2f); // Verde brillante
+    }
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(vertices[i].x, vertices[i].y, 0.0f);
+    for (int j = 0; j <= 30; ++j) {
+      float t = 2.0f * 3.14159265f * (float)j / 30.0f;
+      glVertex3f(vertices[i].x + currentSize * cos(t), vertices[i].y + currentSize * sin(t), 0.0f);
+    }
+    glEnd();
+  }
+}
+
 // Function that draws all Bezier Curves
 void drawBezierCurve(std::vector<BezierCurve> allCurves) {
   if (allCurves.empty()) {
@@ -82,7 +210,6 @@ void drawBezierCurve(std::vector<BezierCurve> allCurves) {
 
     // Draw the Bezier Curve
     glBegin(GL_LINE_STRIP);
-
     for (int i = 0; i <= curve.resolution; ++i) {
       float t = (float)i / (float)curve.resolution;
       Point p = evaluateDeCasteljau(curve.controlPoints, t);
@@ -227,37 +354,78 @@ void handleDrawScene2D(void) {
 
   drawBezierCurve(allCurves);
 
-  // 2D Text Rendering
-  glColor3f(0.0f, 0.0f, 0.0f);
-  // Helper UI
-  std::string editModeText = "Edit Mode";
-  std::string drawModeText = "Draw Mode";
-  std::string pointsText = "+/- to add/remove Control Points";
-  std::string drawText = "d to draw Points";
-  if (currentState == STATE_IDLE) {
-    renderText(900.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_18,
-               editModeText.c_str());
-  } else {
-    renderText(900.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_18,
-               drawModeText.c_str());
-  }
-  renderText(10.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_12,
-             pointsText.c_str());
-  renderText(10.0f, LOGICAL_HEIGHT - 40.0f, GLUT_BITMAP_HELVETICA_12,
-             drawText.c_str());
+  // Dibujar los vertices e hilos creados en el modo de edicion 2D
+  drawVertices();
 
-  // Curve Selection UI
-  if (activeCurveIndex > -1 && activeCurveIndex <= allCurves.size()) {
-    std::string controlPointsText =
-        "Control Points: " +
-        std::to_string(allCurves[activeCurveIndex].controlPoints.size() - 2);
-    renderText(LOGICAL_WIDTH - 200.0f, 20.0f, GLUT_BITMAP_HELVETICA_18,
-               controlPointsText.c_str());
-    std::string resolutionText =
-        "Curve Resolution: " +
-        std::to_string(allCurves[activeCurveIndex].resolution);
-    renderText(LOGICAL_WIDTH - 200.0f, 40.0f, GLUT_BITMAP_HELVETICA_18,
-               resolutionText.c_str());
+  if (vertexEditEnabled) {
+    // Modo Edición de Vértices ACTIVADO: Mostrar un panel limpio y bien delimitado
+    glColor4f(0.95f, 0.95f, 0.95f, 0.8f);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUADS);
+      glVertex2f(5.0f, LOGICAL_HEIGHT - 5.0f);
+      glVertex2f(420.0f, LOGICAL_HEIGHT - 5.0f);
+      glVertex2f(420.0f, LOGICAL_HEIGHT - 105.0f);
+      glVertex2f(5.0f, LOGICAL_HEIGHT - 105.0f);
+    glEnd();
+    glDisable(GL_BLEND);
+
+    // Dibujar el borde del recuadro
+    glColor3f(0.2f, 0.8f, 0.2f); // Borde verde
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+      glVertex2f(5.0f, LOGICAL_HEIGHT - 5.0f);
+      glVertex2f(420.0f, LOGICAL_HEIGHT - 5.0f);
+      glVertex2f(420.0f, LOGICAL_HEIGHT - 105.0f);
+      glVertex2f(5.0f, LOGICAL_HEIGHT - 105.0f);
+    glEnd();
+    glLineWidth(1.0f);
+
+    // Texto descriptivo para la interfaz
+    glColor3f(0.1f, 0.6f, 0.1f);
+    renderText(15.0f, LOGICAL_HEIGHT - 25.0f, GLUT_BITMAP_HELVETICA_18, "EDITOR DE VERTICES: ACTIVADO");
+    
+    glColor3f(0.2f, 0.2f, 0.2f);
+    renderText(15.0f, LOGICAL_HEIGHT - 45.0f, GLUT_BITMAP_HELVETICA_12, "- Click izquierdo libre  : Insertar nuevo vertice");
+    renderText(15.0f, LOGICAL_HEIGHT - 65.0f, GLUT_BITMAP_HELVETICA_12, "- Arrastrar vertice      : Mover posicion");
+    renderText(15.0f, LOGICAL_HEIGHT - 90.0f, GLUT_BITMAP_HELVETICA_12, "[Presiona la tecla V para salir de este modo]");
+  } else {
+    // Modo Edición de Vértices DESACTIVADO: Mostrar la UI original de curvas
+    glColor3f(0.0f, 0.0f, 0.0f);
+    std::string editModeText = "Edit Mode";
+    std::string drawModeText = "Draw Mode";
+    std::string pointsText = "+/- to add/remove Control Points";
+    std::string drawText = "d to draw Points";
+    if (currentState == STATE_IDLE) {
+      renderText(900.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_18,
+                 editModeText.c_str());
+    } else {
+      renderText(900.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_18,
+                 drawModeText.c_str());
+    }
+    renderText(10.0f, LOGICAL_HEIGHT - 20.0f, GLUT_BITMAP_HELVETICA_12,
+               pointsText.c_str());
+    renderText(10.0f, LOGICAL_HEIGHT - 40.0f, GLUT_BITMAP_HELVETICA_12,
+               drawText.c_str());
+
+    // Sugerencia sutil en la parte inferior para activar el modo
+    glColor3f(0.5f, 0.5f, 0.5f);
+    renderText(10.0f, LOGICAL_HEIGHT - 65.0f, GLUT_BITMAP_HELVETICA_12,
+               "[Presiona la tecla V para ingresar al Editor de Vertices]");
+
+    // Curve Selection UI
+    if (activeCurveIndex > -1 && activeCurveIndex <= allCurves.size()) {
+      std::string controlPointsText =
+          "Control Points: " +
+          std::to_string(allCurves[activeCurveIndex].controlPoints.size() - 2);
+      renderText(LOGICAL_WIDTH - 200.0f, 20.0f, GLUT_BITMAP_HELVETICA_18,
+                 controlPointsText.c_str());
+      std::string resolutionText =
+          "Curve Resolution: " +
+          std::to_string(allCurves[activeCurveIndex].resolution);
+      renderText(LOGICAL_WIDTH - 200.0f, 40.0f, GLUT_BITMAP_HELVETICA_18,
+                 resolutionText.c_str());
+    }
   }
 }
 
@@ -496,15 +664,32 @@ void mouseControl(int button, int state, int xMouse, int yMouse) {
   // Convert Mouse to World position
   Point worldPosition = getMouseWorldPosition(
       xMouse, yMouse, winWidth, winHeight, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  int worldX = (int)worldPosition.getX();
-  int worldY = (int)worldPosition.getY();
+  float worldX = worldPosition.getX();
+  float worldY = worldPosition.getY();
+
+  if (currentMode == MODE_CURVE_2D && vertexEditEnabled) {
+    if (button == GLUT_LEFT_BUTTON) {
+      if (state == GLUT_DOWN) {
+        int index = findNearestVertex(worldX, worldY);
+        if (index != -1) {
+          startMoveVertex(index);
+        } else {
+          insertVertex(worldX, worldY);
+        }
+      } else if (state == GLUT_UP) {
+        stopMoveVertex();
+      }
+    }
+    glutPostRedisplay();
+    return;
+  }
 
   if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
     if (currentMode == MODE_CURVE_2D) {
       if (currentState == STATE_IDLE) {
-        handleSelection2D(worldX, worldY);
+        handleSelection2D((int)worldX, (int)worldY);
       } else {
-        handleDraw2D(worldX, worldY);
+        handleDraw2D((int)worldX, (int)worldY);
       }
     }
   }
@@ -521,15 +706,23 @@ void mouseControl(int button, int state, int xMouse, int yMouse) {
 }
 
 void mouseMotion(GLint xMouse, GLint yMouse) {
-  if (pointDragged < 0) {
-    return;
-  }
-
   // Convert Mouse to World position
   Point worldPosition = getMouseWorldPosition(
       xMouse, yMouse, winWidth, winHeight, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   float worldX = worldPosition.getX();
   float worldY = worldPosition.getY();
+
+  if (currentMode == MODE_CURVE_2D && vertexEditEnabled) {
+    if (selectedVertexIndex != -1) {
+      moveSelectedVertex(worldX, worldY);
+      glutPostRedisplay();
+    }
+    return;
+  }
+
+  if (pointDragged < 0) {
+    return;
+  }
 
   if (currentMode == MODE_CURVE_2D) {
     if (!draggedPoints.empty() && currentState == STATE_IDLE) {
@@ -643,7 +836,13 @@ void menuHandler(int value) {
       break;
     case MENU_CLEAR:
       if (currentMode == MODE_CURVE_2D) {
-        allCurves.clear();
+        if (vertexEditEnabled) {
+          vertices.clear();
+          selectedVertexIndex = -1;
+          std::cout << "Vertices limpiados." << std::endl;
+        } else {
+          allCurves.clear();
+        }
       } else {
         allSurfaces.clear();
       }
@@ -749,6 +948,10 @@ void keyInput(unsigned char key, int x, int y) {
   switch (key) {
     case 27:
       exit(0);
+      break;
+    case 'v':
+    case 'V':
+      toggleVertexEditMode();
       break;
     case '+':
       changeControlPointCount(1);
@@ -899,9 +1102,6 @@ int main(int argc, char **argv) {
   glutSpecialFunc(specialKeyInput);
   glutMouseFunc(mouseControl);
   glutMotionFunc(mouseMotion);
-
-  glewExperimental = GL_TRUE;
-  glewInit();
 
   setup();
 
