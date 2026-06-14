@@ -2,7 +2,6 @@
 #define POINT_H
 
 // clang-format off
-#include <GL/glew.h>
 #include <GL/freeglut.h>
 // clang-format on
 #include <cmath>
